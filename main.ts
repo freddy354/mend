@@ -342,7 +342,13 @@ function parseUnified(lines: string[]): Edit[] {
       continue;
     }
     if (line.startsWith('--- ') && (lines[i + 1] ?? '').startsWith('+++ ')) {
-      if (cur !== null && !hasHunks && cur.pairOld === null && cur.pairNew === null) {
+      // A ---/+++ pair before the section's first hunk names the section's
+      // paths (SPEC section 6: "Within a section, before its first hunk:
+      // --- <path> and +++ <path> name the old and new path"), even when an
+      // earlier pair already did so; the later pair replaces the earlier
+      // one. A pair only starts a new section once the current section has
+      // hunks (or there is no current section).
+      if (cur !== null && !hasHunks) {
         cur.pairOld = unifiedPath(line);
         cur.pairNew = unifiedPath(lines[i + 1]!);
         i += 2;
@@ -396,8 +402,11 @@ function parseUnified(lines: string[]): Edit[] {
       continue;
     }
     if (cur !== null && !hasHunks) {
-      if (line.startsWith('rename from ')) cur.renameFrom = line.slice('rename from '.length).trim();
-      else if (line.startsWith('rename to ')) cur.renameTo = line.slice('rename to '.length).trim();
+      // rename from/to name the same old/new paths as ---/+++, so the
+      // leading a/ or b/ git prefix section 6 removes from either path is
+      // removed here too.
+      if (line.startsWith('rename from ')) cur.renameFrom = line.slice('rename from '.length).trim().replace(/^[ab]\//, '');
+      else if (line.startsWith('rename to ')) cur.renameTo = line.slice('rename to '.length).trim().replace(/^[ab]\//, '');
       else if (line.startsWith('new file mode')) cur.isNew = true;
       else if (line.startsWith('deleted file mode')) cur.isDeleted = true;
       // index, old/new mode, similarity, dissimilarity, Index: and any other line: ignored.
